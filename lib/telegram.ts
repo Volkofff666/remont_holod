@@ -1,3 +1,5 @@
+// lib/telegram.ts
+
 interface TelegramMessage {
 	name: string
 	phone: string
@@ -24,7 +26,7 @@ export async function sendToTelegram({ name, phone, source }: TelegramMessage) {
 
 	try {
 		const response = await fetch(
-			`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+			`https://api.telegram.org/bot ${TELEGRAM_BOT_TOKEN}/sendMessage`,
 			{
 				method: 'POST',
 				headers: {
@@ -48,5 +50,3 @@ export async function sendToTelegram({ name, phone, source }: TelegramMessage) {
 		return { success: false, error: 'Failed to send message' }
 	}
 }
-// Для теста в консоли:
-;(window as any).sendToTelegram = sendToTelegram
