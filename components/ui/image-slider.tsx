@@ -57,6 +57,7 @@ const slides: SlideItem[] = [
 		title: 'Результат работы',
 		description: 'Холодильник как новый',
 		type: 'after',
+		position: 'center center',
 	},
 ]
 
