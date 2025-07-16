@@ -32,8 +32,8 @@ export default function HomePage() {
 			<main>
 				<HeroSection />
 				<AdvantagesSection />
-				<ContactLow />
 				<ServicesSection />
+				<ContactLow />
 				<HowWeWorkSection />
 				<GuaranteesSection />
 				<ContactLow />
