@@ -31,6 +31,7 @@ export default function HomePage() {
 			<Header />
 			<main>
 				<HeroSection />
+				<ReviewsSection />
 				<AdvantagesSection />
 				<ServicesSection />
 				<ContactLow />
@@ -38,7 +39,6 @@ export default function HomePage() {
 				<GuaranteesSection />
 				<ContactLow />
 				<GallerySection />
-				<ReviewsSection />
 				<ContactLow />
 				<FAQSection />
 				<ContactSection />
