@@ -121,7 +121,7 @@ export function HeroForm() {
 					onClick={handleBackdropClick}
 				>
 					<div className='bg-white rounded-lg p-6 max-w-sm w-full mx-4'>
-						<h2 className='text-xl font-semibold text-center mb-4'>
+						<h2 className='text-xl font-semibold text-center mb-4 text-black'>
 							{modalMessage.includes('Ошибка') ? 'Ошибка' : 'Спасибо!'}
 						</h2>
 						<p className='text-gray-600 text-center mb-6'>{modalMessage}</p>
