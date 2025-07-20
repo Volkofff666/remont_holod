@@ -10,36 +10,71 @@ export function ContactForm() {
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [isModalOpen, setIsModalOpen] = useState(false)
 	const [modalMessage, setModalMessage] = useState('')
+	const [name, setName] = useState('')
+	const [phone, setPhone] = useState('')
 	const modalRef = useRef<HTMLDivElement>(null)
+	const formRef = useRef<HTMLFormElement>(null)
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault()
 		setIsSubmitting(true)
 
-		const formData = new FormData(e.currentTarget)
-		const name = formData.get('name') as string
-		const phone = formData.get('phone') as string
+		const normalizedPhone = phone.replace(/[\s()-]/g, '') // Нормализация телефона
+
+		// Валидация перед отправкой
+		if (!name.trim() || !normalizedPhone) {
+			setModalMessage('Имя и телефон обязательны')
+			setIsModalOpen(true)
+			setIsSubmitting(false)
+			return
+		}
 
 		try {
 			const response = await fetch('/api/submit-form', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name, phone, source: 'Контактная форма' }),
+				body: JSON.stringify({
+					name: name.trim(),
+					phone: normalizedPhone,
+					source: 'Контактная форма',
+				}),
 			})
 
-			const result = await response.json()
-			if (result.success) {
+			console.log(
+				'ContactForm: HTTP status:',
+				response.status,
+				'OK:',
+				response.ok
+			)
+
+			let result
+			try {
+				result = await response.json()
+				console.log('ContactForm API response:', result)
+			} catch (jsonError) {
+				console.error('ContactForm: JSON parse error:', jsonError)
+				throw new Error('Invalid response format from server')
+			}
+
+			if (response.ok && result.success) {
 				setModalMessage(
 					'Заявка отправлена! Мы свяжемся с вами в течение 5 минут.'
 				)
 				setIsModalOpen(true)
-				e.currentTarget.reset()
+				setName('') // Очистка полей через состояние
+				setPhone('')
+				if (formRef.current) formRef.current.reset() // Безопасная очистка формы
 			} else {
-				setModalMessage('Ошибка отправки заявки. Попробуйте еще раз.')
+				setModalMessage(
+					result.error || 'Ошибка отправки заявки. Попробуйте еще раз.'
+				)
 				setIsModalOpen(true)
 			}
 		} catch (error) {
-			setModalMessage('Ошибка отправки заявки. Попробуйте еще раз.')
+			console.error('ContactForm error:', error)
+			setModalMessage(
+				`Ошибка отправки заявки: ${error.message || 'Попробуйте еще раз.'}`
+			)
 			setIsModalOpen(true)
 		} finally {
 			setIsSubmitting(false)
@@ -72,9 +107,21 @@ export function ContactForm() {
 
 	return (
 		<div className='max-w-md mx-auto p-4'>
-			<form onSubmit={handleSubmit} className='space-y-4'>
-				<Input placeholder='Ваше имя' name='name' required />
-				<PhoneInput placeholder='+7 999 999-99-99' name='phone' />
+			<form ref={formRef} onSubmit={handleSubmit} className='space-y-4'>
+				<Input
+					placeholder='Ваше имя'
+					name='name'
+					value={name}
+					onChange={e => setName(e.target.value)}
+					required
+				/>
+				<PhoneInput
+					placeholder='+7 999 999-99-99'
+					name='phone'
+					value={phone}
+					onChange={e => setPhone(e.target.value)}
+					required
+				/>
 				<Button
 					size='lg'
 					className='w-full bg-blue-600 hover:bg-blue-700'
