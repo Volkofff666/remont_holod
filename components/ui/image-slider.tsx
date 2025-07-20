@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -57,26 +57,72 @@ const slides: SlideItem[] = [
 		title: 'Результат работы',
 		description: 'Холодильник как новый',
 		type: 'after',
-		position: 'center center',
 	},
 ]
 
 export function ImageSlider() {
-	const [currentIndex, setCurrentIndex] = useState(0)
-	const slidesToShow = 3
+	const [currentIndex, setCurrentIndex] = useState(slides.length)
+	const [slidesToShow, setSlidesToShow] = useState(3)
+	const [isTransitioning, setIsTransitioning] = useState(false)
+	const sliderRef = useRef<HTMLDivElement>(null)
+	const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+	// Создаём расширенный массив слайдов: копии в начале и конце
+	const extendedSlides = [
+		...slides.slice(-slidesToShow),
+		...slides,
+		...slides.slice(0, slidesToShow),
+	]
+
+	// Определяем количество слайдов в зависимости от ширины экрана
+	useEffect(() => {
+		const updateSlidesToShow = () => {
+			setSlidesToShow(window.innerWidth < 640 ? 1 : 3)
+			setCurrentIndex(slides.length)
+		}
+
+		updateSlidesToShow()
+		window.addEventListener('resize', updateSlidesToShow)
+		return () => window.removeEventListener('resize', updateSlidesToShow)
+	}, [])
+
+	// Очистка таймера при размонтировании
+	useEffect(() => {
+		return () => {
+			if (timeoutRef.current) {
+				clearTimeout(timeoutRef.current)
+			}
+		}
+	}, [])
 
 	const nextSlide = () => {
-		setCurrentIndex(
-			prevIndex => (prevIndex + 1) % (slides.length - slidesToShow + 1)
-		)
+		if (isTransitioning) return
+		setIsTransitioning(true)
+		setCurrentIndex(prev => prev + 1)
+
+		timeoutRef.current = setTimeout(() => {
+			if (currentIndex + 1 >= slides.length + slidesToShow) {
+				setCurrentIndex(slidesToShow)
+				setIsTransitioning(false)
+			} else {
+				setIsTransitioning(false)
+			}
+		}, 300)
 	}
 
 	const prevSlide = () => {
-		setCurrentIndex(
-			prevIndex =>
-				(prevIndex - 1 + slides.length - slidesToShow + 1) %
-				(slides.length - slidesToShow + 1)
-		)
+		if (isTransitioning) return
+		setIsTransitioning(true)
+		setCurrentIndex(prev => prev - 1)
+
+		timeoutRef.current = setTimeout(() => {
+			if (currentIndex - 1 < slidesToShow) {
+				setCurrentIndex(slides.length)
+				setIsTransitioning(false)
+			} else {
+				setIsTransitioning(false)
+			}
+		}, 300)
 	}
 
 	const getBadgeColor = (type: SlideItem['type']) => {
@@ -98,22 +144,34 @@ export function ImageSlider() {
 		<div className='relative'>
 			<div className='overflow-hidden'>
 				<div
+					ref={sliderRef}
 					className='flex transition-transform duration-300 ease-in-out'
 					style={{
 						transform: `translateX(-${currentIndex * (100 / slidesToShow)}%)`,
+						transition: isTransitioning
+							? 'transform 300ms ease-in-out'
+							: 'none',
 					}}
 				>
-					{slides.map(slide => (
-						<div key={slide.id} className='w-1/3 flex-shrink-0 px-3'>
+					{extendedSlides.map((slide, index) => (
+						<div
+							key={`${slide.id}-${index}`}
+							className={`flex-shrink-0 px-3 ${
+								slidesToShow === 1 ? 'w-full' : 'w-1/3'
+							}`}
+						>
 							<Card className='h-full'>
 								<CardContent className='p-0'>
-									<Image
-										src={slide.image || '/placeholder.svg'}
-										alt={slide.description}
-										width={400}
-										height={300}
-										className='w-full h-48 object-cover rounded-t-lg'
-									/>
+									<div className='relative w-full h-[300px] bg-gray-100 flex items-center justify-center'>
+										<Image
+											src={slide.image || '/placeholder.svg'}
+											alt={slide.description}
+											width={400}
+											height={300}
+											className='max-w-full max-h-full object-contain'
+											style={{ width: '100%', height: '100%' }}
+										/>
+									</div>
 									<div className='p-4'>
 										<Badge className={getBadgeColor(slide.type)}>
 											{slide.title}
@@ -134,7 +192,6 @@ export function ImageSlider() {
 				size='icon'
 				className='absolute left-0 top-1/2 transform -translate-y-1/2 bg-white shadow-lg rounded-full'
 				onClick={prevSlide}
-				disabled={currentIndex === 0}
 			>
 				<ChevronLeft className='text-gray-600' size={24} />
 			</Button>
@@ -144,24 +201,28 @@ export function ImageSlider() {
 				size='icon'
 				className='absolute right-0 top-1/2 transform -translate-y-1/2 bg-white shadow-lg rounded-full'
 				onClick={nextSlide}
-				disabled={currentIndex >= slides.length - slidesToShow}
 			>
 				<ChevronRight className='text-gray-600' size={24} />
 			</Button>
 
-			{/* Dots indicator */}
 			<div className='flex justify-center mt-6 space-x-2'>
-				{Array.from({ length: slides.length - slidesToShow + 1 }).map(
-					(_, index) => (
-						<button
-							key={index}
-							className={`w-3 h-3 rounded-full transition-colors ${
-								index === currentIndex ? 'bg-blue-600' : 'bg-gray-300'
-							}`}
-							onClick={() => setCurrentIndex(index)}
-						/>
-					)
-				)}
+				{slides.map((_, index) => (
+					<button
+						key={index}
+						className={`w-3 h-3 rounded-full transition-colors ${
+							index === (currentIndex - slidesToShow) % slides.length
+								? 'bg-blue-600'
+								: 'bg-gray-300'
+						}`}
+						onClick={() => {
+							setIsTransitioning(true)
+							setCurrentIndex(index + slidesToShow)
+							timeoutRef.current = setTimeout(() => {
+								setIsTransitioning(false)
+							}, 300)
+						}}
+					/>
+				))}
 			</div>
 		</div>
 	)
