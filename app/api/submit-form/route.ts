@@ -5,13 +5,23 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
 	try {
-		// ✅ Получаем данные из обычной формы
-		const formData = await request.formData()
-		const name = formData.get('name')?.toString() || ''
-		const phone = formData.get('phone')?.toString() || ''
-		const source = formData.get('source')?.toString() || 'Сайт'
+		const contentType = request.headers.get('content-type') || ''
 
-		console.log('Received form submission:', { name, phone, source })
+		let name = ''
+		let phone = ''
+		let source = 'Сайт'
+
+		if (contentType.includes('application/json')) {
+			const body = await request.json()
+			name = body.name || ''
+			phone = body.phone || ''
+			source = body.source || 'Сайт'
+		} else {
+			const formData = await request.formData()
+			name = formData.get('name')?.toString() || ''
+			phone = formData.get('phone')?.toString() || ''
+			source = formData.get('source')?.toString() || 'Сайт'
+		}
 
 		if (!name || !phone) {
 			return NextResponse.json(
@@ -37,7 +47,10 @@ export async function POST(request: NextRequest) {
 
 		if (!telegramResult.success) {
 			return NextResponse.json(
-				{ success: false, error: telegramResult.error || 'Ошибка Telegram' },
+				{
+					success: false,
+					error: telegramResult.error || 'Ошибка Telegram',
+				},
 				{ status: 500 }
 			)
 		}
