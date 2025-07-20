@@ -9,7 +9,7 @@ const nextConfig = {
 	images: {
 		unoptimized: true,
 	},
-	output: 'export', // Включает статическую экспортированную сборку
+	// output: 'export', // Включает статическую экспортированную сборку
 	reactStrictMode: true,
 	swcMinify: true,
 }
