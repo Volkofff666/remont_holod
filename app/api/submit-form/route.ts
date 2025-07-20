@@ -1,54 +1,46 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { sendToTelegram } from '@/lib/telegram'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
 	try {
-		const { name, phone, source } = await request.json()
+		// ✅ Получаем данные из обычной формы
+		const formData = await request.formData()
+		const name = formData.get('name')?.toString() || ''
+		const phone = formData.get('phone')?.toString() || ''
+		const source = formData.get('source')?.toString() || 'Сайт'
+
 		console.log('Received form submission:', { name, phone, source })
 
-		// Валидация данных
 		if (!name || !phone) {
-			console.error('Missing required fields:', { name, phone })
 			return NextResponse.json(
 				{ success: false, error: 'Имя и телефон обязательны' },
 				{ status: 400 }
 			)
 		}
 
-		// Нормализация телефона
 		const normalizedPhone = phone.replace(/[\s()-]/g, '')
 		const phoneRegex = /^\+?\d{10,15}$/
 		if (!phoneRegex.test(normalizedPhone)) {
-			console.error('Invalid phone format:', normalizedPhone)
 			return NextResponse.json(
 				{ success: false, error: 'Некорректный формат телефона' },
 				{ status: 400 }
 			)
 		}
 
-		// Отправка в Telegram
 		const telegramResult = await sendToTelegram({
-			name,
-			phone: normalizedPhone,
-			source: source || 'Сайт',
-		})
-
-		if (!telegramResult.success) {
-			console.error('Telegram send error:', telegramResult.error)
-			return NextResponse.json(
-				{
-					success: false,
-					error: telegramResult.error || 'Ошибка отправки заявки в Telegram',
-				},
-				{ status: 500 }
-			)
-		}
-
-		console.log('Form submission sent to Telegram successfully:', {
 			name,
 			phone: normalizedPhone,
 			source,
 		})
+
+		if (!telegramResult.success) {
+			return NextResponse.json(
+				{ success: false, error: telegramResult.error || 'Ошибка Telegram' },
+				{ status: 500 }
+			)
+		}
 
 		return NextResponse.json({
 			success: true,
