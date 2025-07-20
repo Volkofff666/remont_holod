@@ -8,11 +8,11 @@ export async function sendToTelegram({
 	source: string
 }) {
 	try {
-		const botToken = process.env.TELEGRAM_BOT_TOKEN
-		const chatId = process.env.TELEGRAM_CHAT_ID
+		const botToken = '7660028494:AAH6EHywVxYjtlRKFeFMFTn_E28eTcCYE9I' // Замени на твой токен от BotFather
+		const chatIds = ['707196422', '1041230539', '577437701']
 
-		if (!botToken || !chatId) {
-			throw new Error('Missing Telegram bot token or chat ID')
+		if (!botToken) {
+			throw new Error('Missing Telegram bot token')
 		}
 
 		const message = `
@@ -25,9 +25,9 @@ export async function sendToTelegram({
 			})}
     `
 
-		const response = await fetch(
-			`https://api.telegram.org/bot${botToken}/sendMessage`,
-			{
+		const sendPromises = chatIds.map(async chatId => {
+			const url = `https://api.telegram.org/bot${botToken}/sendMessage`
+			const response = await fetch(url, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -37,17 +37,22 @@ export async function sendToTelegram({
 					text: message,
 					parse_mode: 'Markdown',
 				}),
+			})
+
+			const result = await response.json()
+			if (!result.ok) {
+				console.error(
+					`Failed to send message to chat ${chatId}:`,
+					result.description
+				)
+				throw new Error(
+					`Failed to send message to chat ${chatId}: ${result.description}`
+				)
 			}
-		)
+			return result
+		})
 
-		const result = await response.json()
-
-		if (!result.ok) {
-			throw new Error(
-				result.description || 'Failed to send message to Telegram'
-			)
-		}
-
+		await Promise.all(sendPromises)
 		return { success: true }
 	} catch (error) {
 		console.error('Error sending to Telegram:', error)

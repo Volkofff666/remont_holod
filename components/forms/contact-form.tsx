@@ -6,38 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PhoneInput } from '@/components/ui/phone-input'
 
-// Функция форматирования номера телефона
-const formatPhoneNumber = (value: string): string => {
-	const digits = value.replace(/\D/g, '') // Удаляем всё, кроме цифр
-	const limitedDigits = digits.slice(0, 11) // Ограничиваем до 11 цифр (+7 + 10)
-
-	let formatted = limitedDigits
-	if (limitedDigits.length > 0) {
-		formatted =
-			limitedDigits.startsWith('7') || limitedDigits.startsWith('8')
-				? `+7${limitedDigits.slice(1)}`
-				: `+7${limitedDigits}`
-	} else {
-		formatted = '+7'
-	}
-
-	let result = formatted.slice(0, 2) // +7
-	if (formatted.length > 2) {
-		result += ` ${formatted.slice(2, 5)}` // +7 999
-	}
-	if (formatted.length > 5) {
-		result += ` ${formatted.slice(5, 8)}` // +7 999 999
-	}
-	if (formatted.length > 8) {
-		result += `-${formatted.slice(8, 10)}` // +7 999 999-99
-	}
-	if (formatted.length > 10) {
-		result += `-${formatted.slice(10, 12)}` // +7 999 999-99-99
-	}
-
-	return result.slice(0, 14) // Ограничиваем до +7 999 999-99-99
-}
-
 export function ContactForm() {
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [isModalOpen, setIsModalOpen] = useState(false)
@@ -46,17 +14,6 @@ export function ContactForm() {
 	const [phone, setPhone] = useState('')
 	const modalRef = useRef<HTMLDivElement>(null)
 	const formRef = useRef<HTMLFormElement>(null)
-
-	const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const formatted = formatPhoneNumber(e.target.value)
-		console.log(
-			'ContactForm: Phone input=',
-			e.target.value,
-			'Formatted=',
-			formatted
-		)
-		setPhone(formatted)
-	}
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault()
@@ -162,9 +119,16 @@ export function ContactForm() {
 					placeholder='+7 999 999-99-99'
 					name='phone'
 					value={phone}
-					onChange={handlePhoneChange}
+					onChange={e => {
+						console.log(
+							'ContactForm: Phone input=',
+							e.target.value,
+							'Length=',
+							e.target.value.length
+						)
+						setPhone(e.target.value)
+					}}
 					required
-					maxLength={14}
 				/>
 				<Button
 					size='lg'
