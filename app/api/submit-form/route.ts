@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { sendToTelegram } from '@/lib/telegram'
 
+export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest) {
 	try {
 		const { name, phone, source } = await request.json()
