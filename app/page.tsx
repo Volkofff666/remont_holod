@@ -43,6 +43,7 @@ export default function HomePage() {
 				<ContactLow />
 				<FAQSection />
 				<ContactSection />
+				<Analytics />
 			</main>
 			<Footer />
 		</div>
