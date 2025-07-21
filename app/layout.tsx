@@ -25,7 +25,7 @@ export const metadata: Metadata = {
 		follow: true,
 	},
 	alternates: {
-		canonical: 'https://www.acooling.ru',
+		canonical: 'https://acooling.ru',
 	},
 	generator: 'Next,js',
 }
@@ -47,7 +47,7 @@ export default function RootLayout({
 							name: 'ACOOLing',
 							description:
 								'Профессиональный ремонт холодильников на дому в Санкт-Петербурге',
-							url: 'https://www.acooling.ru',
+							url: 'https://acooling.ru',
 							telephone: '+7-812-123-45-67',
 							address: {
 								'@type': 'PostalAddress',
