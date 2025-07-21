@@ -1,4 +1,5 @@
 'use client'
+import { Analytics } from '@vercel/analytics/next'
 import { usePhoneFormat } from '../hooks/usePhoneFormat'
 import { useEffect } from 'react'
 import { HeroSection } from '@/components/sections/hero-section'
