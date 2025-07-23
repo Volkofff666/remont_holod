@@ -1,4 +1,6 @@
 'use client'
+
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import { Analytics } from '@vercel/analytics/next'
 import { usePhoneFormat } from '../hooks/usePhoneFormat'
 import { useEffect } from 'react'
@@ -44,6 +46,7 @@ export default function HomePage() {
 				<FAQSection />
 				<ContactSection />
 				<Analytics />
+				<SpeedInsights />
 			</main>
 			<Footer />
 		</div>
