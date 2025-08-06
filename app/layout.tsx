@@ -75,6 +75,7 @@ export default function RootLayout({
 						}),
 					}}
 				/>
+				<meta name='yandex-verification' content='0ac84a65bdeee7cf' />
 			</head>
 			<body className={inter.className}>
 				{children} <YandexMetrika />
