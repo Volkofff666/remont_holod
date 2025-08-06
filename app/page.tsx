@@ -17,6 +17,7 @@ import { ContactLow } from '@/components/sections/contact-low'
 import { Header } from '@/components/layout/header'
 import { Footer } from '@/components/layout/footer'
 import { HeroForm } from '@/components/hero-form'
+import YandexMetrika from '@/components/YandexMetrika'
 
 export default function HomePage() {
 	const { phoneValue, handlePhoneChange } = usePhoneFormat()
@@ -47,6 +48,7 @@ export default function HomePage() {
 				<ContactSection />
 				<Analytics />
 				<SpeedInsights />
+				<YandexMetrika />
 			</main>
 			<Footer />
 		</div>

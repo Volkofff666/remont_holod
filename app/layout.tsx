@@ -2,6 +2,7 @@ import type React from 'react'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import YandexMetrika from '@/components/YandexMetrika'
 
 const inter = Inter({ subsets: ['latin', 'cyrillic'] })
 
@@ -48,10 +49,10 @@ export default function RootLayout({
 							description:
 								'Профессиональный ремонт холодильников на дому в Санкт-Петербурге',
 							url: 'https://acooling.ru',
-							telephone: '+7-812-123-45-67',
+							telephone: '8-904-633-10-45',
 							address: {
 								'@type': 'PostalAddress',
-								streetAddress: 'ул. Примерная, д. 1',
+								streetAddress: 'ул. Хлопина, д. 9к1',
 								addressLocality: 'Санкт-Петербург',
 								addressCountry: 'RU',
 							},
@@ -75,7 +76,9 @@ export default function RootLayout({
 					}}
 				/>
 			</head>
-			<body className={inter.className}>{children}</body>
+			<body className={inter.className}>
+				{children} <YandexMetrika />
+			</body>
 		</html>
 	)
 }

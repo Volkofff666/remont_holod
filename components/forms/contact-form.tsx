@@ -2,9 +2,9 @@
 
 import type React from 'react'
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PhoneInput } from '@/components/ui/phone-input'
 
 export function ContactForm() {
 	const [isSubmitting, setIsSubmitting] = useState(false)
@@ -14,15 +14,63 @@ export function ContactForm() {
 	const [phone, setPhone] = useState('')
 	const modalRef = useRef<HTMLDivElement>(null)
 	const formRef = useRef<HTMLFormElement>(null)
+	const router = useRouter()
+
+	// Функция форматирования номера телефона
+	const formatPhoneNumber = (value: string): string => {
+		// Убираем все нецифровые символы
+		const phoneNumber = value.replace(/\D/g, '')
+
+		// Если номер начинается с 8, заменяем на 7
+		let cleaned = phoneNumber
+		if (cleaned.startsWith('8')) {
+			cleaned = '7' + cleaned.slice(1)
+		}
+
+		// Если номер начинается с 9, добавляем код страны
+		if (cleaned.startsWith('9') && cleaned.length >= 10) {
+			cleaned = '7' + cleaned
+		}
+
+		// Ограничиваем длину до 11 цифр (7 + 10 цифр номера)
+		if (cleaned.length > 11) {
+			cleaned = cleaned.slice(0, 11)
+		}
+
+		// Форматируем номер
+		let formatted = ''
+		for (let i = 0; i < cleaned.length; i++) {
+			if (i === 0) formatted += '+'
+			if (i === 1) formatted += ' '
+			if (i === 4) formatted += ' '
+			if (i === 7) formatted += '-'
+			if (i === 9) formatted += '-'
+			formatted += cleaned[i]
+		}
+
+		return formatted
+	}
+
+	// Обработчик изменения номера телефона
+	const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const input = e.target.value
+		const formatted = formatPhoneNumber(input)
+		setPhone(formatted)
+	}
+
+	// Получение чистого номера для отправки (только цифры)
+	const getCleanPhoneNumber = (): string => {
+		return phone.replace(/\D/g, '')
+	}
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault()
 		setIsSubmitting(true)
 
-		const normalizedPhone = phone.replace(/[\s()-]/g, '') // Нормализация телефона
+		const cleanPhone = getCleanPhoneNumber()
 
 		// Валидация перед отправкой
-		if (!name.trim() || !normalizedPhone || normalizedPhone.length < 11) {
+		if (!name.trim() || cleanPhone.length < 11) {
 			setModalMessage('Имя и полный номер телефона обязательны')
 			setIsModalOpen(true)
 			setIsSubmitting(false)
@@ -35,7 +83,7 @@ export function ContactForm() {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					name: name.trim(),
-					phone: normalizedPhone,
+					phone: cleanPhone,
 					source: 'Контактная форма',
 				}),
 			})
@@ -57,13 +105,12 @@ export function ContactForm() {
 			}
 
 			if (response.ok && result.success) {
-				setModalMessage(
-					'Заявка отправлена! Мы свяжемся с вами в течение 5 минут.'
+				// Редирект на страницу успеха вместо модального окна
+				router.push(
+					`/success?name=${encodeURIComponent(
+						name.trim()
+					)}&phone=${encodeURIComponent(cleanPhone)}`
 				)
-				setIsModalOpen(true)
-				setName('')
-				setPhone('')
-				if (formRef.current) formRef.current.reset()
 			} else {
 				setModalMessage(
 					result.error || 'Ошибка отправки заявки. Попробуйте еще раз.'
@@ -115,19 +162,11 @@ export function ContactForm() {
 					onChange={e => setName(e.target.value)}
 					required
 				/>
-				<PhoneInput
+				<Input
 					placeholder='+7 999 999-99-99'
 					name='phone'
 					value={phone}
-					onChange={e => {
-						console.log(
-							'ContactForm: Phone input=',
-							e.target.value,
-							'Length=',
-							e.target.value.length
-						)
-						setPhone(e.target.value)
-					}}
+					onChange={handlePhoneChange}
 					required
 				/>
 				<Button
