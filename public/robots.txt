@@ -1,1 +1,9 @@
-User-agent: * Disallow: /api/* Disallow: /admin/ Disallow: /test/ Allow: / Sitemap: https://acooling.ru/sitemap.xml
+# *
+User-agent: *
+Allow: /
+
+# Host
+Host: https://acooling.ru
+
+# Sitemaps
+Sitemap: https://acooling.ru/sitemap.xml
