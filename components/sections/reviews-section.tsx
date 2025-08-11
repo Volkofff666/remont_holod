@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Star, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { useRouter } from 'next/navigation'
 
 interface Review {
 	text: string
@@ -104,9 +106,16 @@ export function ReviewsSection() {
 	const [slidesToShow, setSlidesToShow] = useState(3)
 	const [isTransitioning, setIsTransitioning] = useState(false)
 	const [selectedReview, setSelectedReview] = useState<Review | null>(null)
+	const [name, setName] = useState('')
+	const [phone, setPhone] = useState('')
+	const [isSubmitting, setIsSubmitting] = useState(false)
+	const [submitStatus, setSubmitStatus] = useState<
+		'idle' | 'success' | 'error'
+	>('idle')
 	const sliderRef = useRef<HTMLDivElement>(null)
 	const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 	const modalRef = useRef<HTMLDivElement>(null)
+	const router = useRouter()
 
 	// Создаём расширенный массив отзывов: копии в начале и конце
 	const extendedReviews = [
@@ -114,6 +123,43 @@ export function ReviewsSection() {
 		...reviews,
 		...reviews.slice(0, slidesToShow),
 	]
+
+	// Функция форматирования номера телефона
+	const formatPhoneNumber = (value: string): string => {
+		const phoneNumber = value.replace(/\D/g, '')
+		let cleaned = phoneNumber
+
+		if (cleaned.startsWith('8')) {
+			cleaned = '7' + cleaned.slice(1)
+		}
+		if (cleaned.startsWith('9') && cleaned.length >= 10) {
+			cleaned = '7' + cleaned
+		}
+		if (cleaned.length > 11) {
+			cleaned = cleaned.slice(0, 11)
+		}
+
+		let formatted = ''
+		for (let i = 0; i < cleaned.length; i++) {
+			if (i === 0) formatted += '+'
+			if (i === 1) formatted += ' '
+			if (i === 4) formatted += ' '
+			if (i === 7) formatted += '-'
+			if (i === 9) formatted += '-'
+			formatted += cleaned[i]
+		}
+		return formatted
+	}
+
+	const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const input = e.target.value
+		const formatted = formatPhoneNumber(input)
+		setPhone(formatted)
+	}
+
+	const getCleanPhoneNumber = (): string => {
+		return phone.replace(/\D/g, '')
+	}
 
 	// Определяем количество слайдов в зависимости от ширины экрана
 	useEffect(() => {
@@ -199,6 +245,61 @@ export function ReviewsSection() {
 		if (isTransitioning) return
 		setIsTransitioning(true)
 		setCurrentIndex(prev => prev - 1)
+	}
+
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault()
+		setIsSubmitting(true)
+		setSubmitStatus('idle')
+
+		const cleanPhone = getCleanPhoneNumber()
+
+		if (!name.trim() || cleanPhone.length < 11) {
+			setSubmitStatus('error')
+			setIsSubmitting(false)
+			return
+		}
+
+		try {
+			const response = await fetch('/api/submit-form', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					name: name.trim(),
+					phone: cleanPhone,
+					source: 'Форма в отзывах',
+				}),
+			})
+
+			let result
+			try {
+				result = await response.json()
+			} catch (jsonError) {
+				throw new Error('Invalid response format from server')
+			}
+
+			if (response.ok && result.success) {
+				setSubmitStatus('success')
+				// Очищаем форму
+				setName('')
+				setPhone('')
+				// Через 2 секунды редиректим
+				setTimeout(() => {
+					router.push(
+						`/success?name=${encodeURIComponent(
+							name.trim()
+						)}&phone=${encodeURIComponent(cleanPhone)}`
+					)
+				}, 2000)
+			} else {
+				setSubmitStatus('error')
+			}
+		} catch (error) {
+			console.error('Form error:', error)
+			setSubmitStatus('error')
+		} finally {
+			setIsSubmitting(false)
+		}
 	}
 
 	// Ограничение текста до 150 символов
@@ -337,6 +438,57 @@ export function ReviewsSection() {
 							Посмотреть все отзывы на Авито
 						</a>
 					</Button>
+				</div>
+
+				{/* Минималистичная форма */}
+				<div className='max-w-2xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-12'>
+					<div className='text-center mb-6'>
+						<h3 className='text-2xl font-bold text-gray-900 mb-2'>
+							Получите консультацию бесплатно
+						</h3>
+						<p className='text-gray-600'>
+							Оставьте заявку и наш мастер перезвонит в течение 15 минут
+						</p>
+					</div>
+
+					<form onSubmit={handleSubmit} className='space-y-4'>
+						<div className='grid md:grid-cols-2 gap-4'>
+							<Input
+								placeholder='Ваше имя'
+								value={name}
+								onChange={e => setName(e.target.value)}
+								required
+								className='h-12'
+							/>
+							<Input
+								placeholder='+7 999 999-99-99'
+								value={phone}
+								onChange={handlePhoneChange}
+								required
+								className='h-12'
+							/>
+						</div>
+
+						<Button
+							type='submit'
+							disabled={isSubmitting}
+							className='w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium'
+						>
+							{isSubmitting ? 'Отправляем...' : 'Получить консультацию'}
+						</Button>
+
+						{submitStatus === 'success' && (
+							<div className='text-center text-green-600 text-sm'>
+								Заявка отправлена! Мы скоро перезвоним.
+							</div>
+						)}
+
+						{submitStatus === 'error' && (
+							<div className='text-center text-red-600 text-sm'>
+								Пожалуйста, заполните все поля корректно
+							</div>
+						)}
+					</form>
 				</div>
 
 				{selectedReview && (

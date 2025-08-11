@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 
 export function Header() {
 	return (
-		<header className='bg-white shadow-sm border-b'>
+		<header className='bg-white shadow-sm border-b sticky top-0 z-50'>
 			<div className='container mx-auto px-4 py-4'>
 				<div className='flex items-center justify-between'>
 					<div className='text-2xl font-bold text-blue-600'>ACOOLing</div>

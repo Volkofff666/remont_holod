@@ -17,6 +17,7 @@ import { ContactLow } from '@/components/sections/contact-low'
 import { Header } from '@/components/layout/header'
 import { Footer } from '@/components/layout/footer'
 import { HeroForm } from '@/components/hero-form'
+import { PromoPopup } from '@/components/PromoPopup'
 import YandexMetrika from '@/components/YandexMetrika'
 
 export default function HomePage() {
@@ -49,6 +50,7 @@ export default function HomePage() {
 				<Analytics />
 				<SpeedInsights />
 				<YandexMetrika />
+				<PromoPopup />
 			</main>
 			<Footer />
 		</div>
