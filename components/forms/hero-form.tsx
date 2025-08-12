@@ -20,15 +20,30 @@ export function HeroForm() {
 		// Убираем все нецифровые символы
 		const phoneNumber = value.replace(/\D/g, '')
 
-		// Если номер начинается с 8, заменяем на 7
+		// Если номер пустой, возвращаем пустую строку
+		if (!phoneNumber) return ''
+
 		let cleaned = phoneNumber
+
+		// Если номер начинается с 8, заменяем на 7
 		if (cleaned.startsWith('8')) {
 			cleaned = '7' + cleaned.slice(1)
 		}
 
-		// Если номер начинается с 9, добавляем код страны
+		// Если номер начинается с 9 и имеет достаточную длину, добавляем код страны 7
 		if (cleaned.startsWith('9') && cleaned.length >= 10) {
 			cleaned = '7' + cleaned
+		}
+
+		// Если номер не начинается с 7, обрезаем или добавляем 7 в начало
+		if (!cleaned.startsWith('7') && cleaned.length > 0) {
+			// Если введена первая цифра не 7 и не 8 и не 9, то заменяем на 7
+			if (cleaned.length === 1 && !['7', '8', '9'].includes(cleaned)) {
+				cleaned = '7'
+			} else if (cleaned.length > 1) {
+				// Для остальных случаев добавляем 7 в начало
+				cleaned = '7' + cleaned
+			}
 		}
 
 		// Ограничиваем длину до 11 цифр (7 + 10 цифр номера)
@@ -36,18 +51,25 @@ export function HeroForm() {
 			cleaned = cleaned.slice(0, 11)
 		}
 
-		// Форматируем номер
-		let formatted = ''
-		for (let i = 0; i < cleaned.length; i++) {
-			if (i === 0) formatted += '+'
-			if (i === 1) formatted += ' '
-			if (i === 4) formatted += ' '
-			if (i === 7) formatted += '-'
-			if (i === 9) formatted += '-'
-			formatted += cleaned[i]
+		// Форматируем номер только если он начинается с 7
+		if (cleaned.startsWith('7')) {
+			let formatted = '+'
+			for (let i = 0; i < cleaned.length; i++) {
+				if (i === 1) formatted += ' '
+				if (i === 4) formatted += ' '
+				if (i === 7) formatted += '-'
+				if (i === 9) formatted += '-'
+				formatted += cleaned[i]
+			}
+			return formatted
 		}
 
-		return formatted
+		// Если номер не начинается с 7, но есть цифры, начинаем с +
+		if (cleaned.length > 0) {
+			return '+' + cleaned
+		}
+
+		return ''
 	}
 
 	// Обработчик изменения номера телефона
@@ -69,8 +91,22 @@ export function HeroForm() {
 		const cleanPhone = getCleanPhoneNumber()
 
 		// Валидация номера телефона
-		if (cleanPhone.length < 11) {
-			setModalMessage('Пожалуйста, введите полный номер телефона')
+		if (!name.trim()) {
+			setModalMessage('Пожалуйста, введите ваше имя')
+			setIsModalOpen(true)
+			setIsSubmitting(false)
+			return
+		}
+
+		// Проверяем, что номер начинается с 7 и имеет 11 цифр
+		if (
+			!cleanPhone ||
+			!cleanPhone.startsWith('7') ||
+			cleanPhone.length !== 11
+		) {
+			setModalMessage(
+				'Пожалуйста, введите корректный номер телефона (+7 XXX XXX-XX-XX)'
+			)
 			setIsModalOpen(true)
 			setIsSubmitting(false)
 			return
@@ -164,7 +200,10 @@ export function HeroForm() {
 					size='lg'
 					className='w-full bg-white text-blue-600 hover:bg-gray-100 disabled:opacity-50'
 					disabled={
-						isSubmitting || !name.trim() || getCleanPhoneNumber().length < 11
+						isSubmitting ||
+						!name.trim() ||
+						getCleanPhoneNumber().length < 11 ||
+						!getCleanPhoneNumber().startsWith('7')
 					}
 				>
 					{isSubmitting ? 'Отправляем...' : 'Вызвать мастера'}
