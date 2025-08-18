@@ -3,8 +3,20 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import YandexMetrika from '@/components/YandexMetrika'
+import { SmartCaptcha } from '@yandex/smart-captcha'
 
 const inter = Inter({ subsets: ['latin', 'cyrillic'] })
+
+export const ComponentWithCaptcha = () => {
+	const [token, setToken] = useState('')
+
+	return (
+		<SmartCaptcha
+			sitekey='ysc1_LZ2923LcwVO7V7F7XaGkQZvK87gWYBRdV4etZemlcea6620a'
+			onSuccess={setToken}
+		/>
+	)
+}
 
 export const metadata: Metadata = {
 	title:
