@@ -6,6 +6,7 @@ import { Star, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRouter } from 'next/navigation'
+import Captcha from '@/components/captcha/Captcha'
 
 interface Review {
 	text: string
@@ -112,6 +113,7 @@ export function ReviewsSection() {
 	const [submitStatus, setSubmitStatus] = useState<
 		'idle' | 'success' | 'error'
 	>('idle')
+	const [captchaToken, setCaptchaToken] = useState('') // <-- добавили
 	const sliderRef = useRef<HTMLDivElement>(null)
 	const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 	const modalRef = useRef<HTMLDivElement>(null)
@@ -302,6 +304,13 @@ export function ReviewsSection() {
 			return
 		}
 
+		// Новое: без токена не отправляем
+		if (!captchaToken) {
+			setSubmitStatus('error')
+			setIsSubmitting(false)
+			return
+		}
+
 		try {
 			const response = await fetch('/api/submit-form', {
 				method: 'POST',
@@ -310,6 +319,7 @@ export function ReviewsSection() {
 					name: name.trim(),
 					phone: cleanPhone,
 					source: 'Форма в отзывах',
+					captchaToken, // <-- отправляем токен
 				}),
 			})
 
@@ -325,6 +335,8 @@ export function ReviewsSection() {
 				// Очищаем форму
 				setName('')
 				setPhone('')
+				;(globalThis as any).__resetCaptcha?.()
+				setCaptchaToken('')
 				// Через 2 секунды редиректим
 				setTimeout(() => {
 					router.push(
@@ -335,10 +347,14 @@ export function ReviewsSection() {
 				}, 2000)
 			} else {
 				setSubmitStatus('error')
+				;(globalThis as any).__resetCaptcha?.()
+				setCaptchaToken('')
 			}
 		} catch (error) {
 			console.error('Form error:', error)
 			setSubmitStatus('error')
+			;(globalThis as any).__resetCaptcha?.()
+			setCaptchaToken('')
 		} finally {
 			setIsSubmitting(false)
 		}
@@ -511,9 +527,27 @@ export function ReviewsSection() {
 							/>
 						</div>
 
+						{/* Уведомление об обработке данных SmartCaptcha */}
+						<p className='text-xs text-gray-500'>
+							На этой странице используется Yandex SmartCaptcha. Данные (включая
+							IP) могут обрабатываться сервисом для защиты от ботов.
+						</p>
+
+						{/* Видимая капча */}
+						<Captcha
+							sitekey={process.env.NEXT_PUBLIC_YC_CAPTCHA_SITEKEY as string}
+							language='ru'
+							// test // <- раскомментируйте в dev для тестирования
+							onToken={t => setCaptchaToken(t)}
+							onTokenExpired={() => setCaptchaToken('')}
+							onStatusChange={s => console.log('captcha:', s)}
+							hideShield={false}
+							className='pt-1'
+						/>
+
 						<Button
 							type='submit'
-							disabled={isSubmitting}
+							disabled={isSubmitting || !captchaToken}
 							className='w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium'
 						>
 							{isSubmitting ? 'Отправляем...' : 'Получить консультацию'}
@@ -528,7 +562,7 @@ export function ReviewsSection() {
 						{submitStatus === 'error' && (
 							<div className='text-center text-red-600 text-sm'>
 								Пожалуйста, введите корректные данные (имя и номер +7 XXX
-								XXX-XX-XX)
+								XXX-XX-XX) и подтвердите, что вы не робот
 							</div>
 						)}
 					</form>
