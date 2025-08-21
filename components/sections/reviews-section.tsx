@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Star, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRouter } from 'next/navigation'
-import Captcha from '@/components/captcha/Captcha'
+import InvisibleCaptcha from '@/components/captcha/InvisibleCaptcha' // 👈 невидимая капча
 
 interface Review {
 	text: string
@@ -30,11 +30,7 @@ const reviews: Review[] = [
 		author: 'Ирина, Калининский район',
 		rating: 5,
 	},
-	{
-		text: 'Все хорошо спасибо за работу!',
-		author: 'Alesk',
-		rating: 5,
-	},
+	{ text: 'Все хорошо спасибо за работу!', author: 'Alesk', rating: 5 },
 	{
 		text: 'Мастер приехал мгновенно, день в день, несмотря на позднее время. Услуга оказана качественно и быстро. Вежливое общение. Рекомендую, профессионал своего дела! 👍',
 		author: 'Malina',
@@ -107,62 +103,47 @@ export function ReviewsSection() {
 	const [slidesToShow, setSlidesToShow] = useState(3)
 	const [isTransitioning, setIsTransitioning] = useState(false)
 	const [selectedReview, setSelectedReview] = useState<Review | null>(null)
+
 	const [name, setName] = useState('')
 	const [phone, setPhone] = useState('')
+
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [submitStatus, setSubmitStatus] = useState<
 		'idle' | 'success' | 'error'
 	>('idle')
-	const [captchaToken, setCaptchaToken] = useState('') // <-- добавили
+
+	// токен + управление показом челленджа
+	const [captchaToken, setCaptchaToken] = useState('')
+	const [captchaVisible, setCaptchaVisible] = useState(false)
+
 	const sliderRef = useRef<HTMLDivElement>(null)
 	const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 	const modalRef = useRef<HTMLDivElement>(null)
 	const router = useRouter()
 
-	// Создаём расширенный массив отзывов: копии в начале и конце
+	const sitekey = process.env.NEXT_PUBLIC_YC_CAPTCHA_SITEKEY as string
+	const testMode = process.env.NEXT_PUBLIC_YC_CAPTCHA_TEST === 'true'
+
+	// Расширенный массив отзывов
 	const extendedReviews = [
 		...reviews.slice(-slidesToShow),
 		...reviews,
 		...reviews.slice(0, slidesToShow),
 	]
 
-	// Функция форматирования номера телефона
+	// Форматирование телефона
 	const formatPhoneNumber = (value: string): string => {
-		// Убираем все нецифровые символы
 		const phoneNumber = value.replace(/\D/g, '')
-
-		// Если номер пустой, возвращаем пустую строку
 		if (!phoneNumber) return ''
-
 		let cleaned = phoneNumber
-
-		// Если номер начинается с 8, заменяем на 7
-		if (cleaned.startsWith('8')) {
-			cleaned = '7' + cleaned.slice(1)
-		}
-
-		// Если номер начинается с 9 и имеет достаточную длину, добавляем код страны 7
-		if (cleaned.startsWith('9') && cleaned.length >= 10) {
-			cleaned = '7' + cleaned
-		}
-
-		// Если номер не начинается с 7, обрезаем или добавляем 7 в начало
+		if (cleaned.startsWith('8')) cleaned = '7' + cleaned.slice(1)
+		if (cleaned.startsWith('9') && cleaned.length >= 10) cleaned = '7' + cleaned
 		if (!cleaned.startsWith('7') && cleaned.length > 0) {
-			// Если введена первая цифра не 7 и не 8 и не 9, то заменяем на 7
-			if (cleaned.length === 1 && !['7', '8', '9'].includes(cleaned)) {
+			if (cleaned.length === 1 && !['7', '8', '9'].includes(cleaned))
 				cleaned = '7'
-			} else if (cleaned.length > 1) {
-				// Для остальных случаев добавляем 7 в начало
-				cleaned = '7' + cleaned
-			}
+			else if (cleaned.length > 1) cleaned = '7' + cleaned
 		}
-
-		// Ограничиваем длину до 11 цифр (7 + 10 цифр номера)
-		if (cleaned.length > 11) {
-			cleaned = cleaned.slice(0, 11)
-		}
-
-		// Форматируем номер только если он начинается с 7
+		if (cleaned.length > 11) cleaned = cleaned.slice(0, 11)
 		if (cleaned.startsWith('7')) {
 			let formatted = '+'
 			for (let i = 0; i < cleaned.length; i++) {
@@ -174,12 +155,7 @@ export function ReviewsSection() {
 			}
 			return formatted
 		}
-
-		// Если номер не начинается с 7, но есть цифры, начинаем с +
-		if (cleaned.length > 0) {
-			return '+' + cleaned
-		}
-
+		if (cleaned.length > 0) return '+' + cleaned
 		return ''
 	}
 
@@ -189,30 +165,23 @@ export function ReviewsSection() {
 		setPhone(formatted)
 	}
 
-	const getCleanPhoneNumber = (): string => {
-		return phone.replace(/\D/g, '')
-	}
+	const getCleanPhoneNumber = (): string => phone.replace(/\D/g, '')
 
-	// Определяем количество слайдов в зависимости от ширины экрана
+	// responsive кол-во слайдов
 	useEffect(() => {
 		const updateSlidesToShow = () => {
 			const width = window.innerWidth
-			if (width < 640) {
-				setSlidesToShow(1)
-			} else if (width < 1024) {
-				setSlidesToShow(2)
-			} else {
-				setSlidesToShow(3)
-			}
+			if (width < 640) setSlidesToShow(1)
+			else if (width < 1024) setSlidesToShow(2)
+			else setSlidesToShow(3)
 			setCurrentIndex(reviews.length)
 		}
-
 		updateSlidesToShow()
 		window.addEventListener('resize', updateSlidesToShow)
 		return () => window.removeEventListener('resize', updateSlidesToShow)
 	}, [])
 
-	// Автопрокрутка каждые 3 секунды
+	// автопрокрутка
 	useEffect(() => {
 		const autoSlide = () => {
 			if (!isTransitioning && !selectedReview) {
@@ -220,13 +189,11 @@ export function ReviewsSection() {
 				setCurrentIndex(prev => prev + 1)
 			}
 		}
-
 		const interval = setInterval(autoSlide, 3000)
-
 		return () => clearInterval(interval)
 	}, [isTransitioning, selectedReview])
 
-	// Обработка переходов для бесконечной прокрутки
+	// бесконечная прокрутка
 	useEffect(() => {
 		if (isTransitioning) {
 			timeoutRef.current = setTimeout(() => {
@@ -241,30 +208,23 @@ export function ReviewsSection() {
 				}
 			}, 300)
 		}
-
 		return () => {
-			if (timeoutRef.current) {
-				clearTimeout(timeoutRef.current)
-			}
+			if (timeoutRef.current) clearTimeout(timeoutRef.current)
 		}
 	}, [currentIndex, isTransitioning, slidesToShow])
 
-	// Закрытие модала по клавише Esc
+	// модал отзывов esc
 	useEffect(() => {
 		const handleEsc = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') {
-				setSelectedReview(null)
-			}
+			if (event.key === 'Escape') setSelectedReview(null)
 		}
 		window.addEventListener('keydown', handleEsc)
 		return () => window.removeEventListener('keydown', handleEsc)
 	}, [])
 
-	// Закрытие модала при клике на фон
 	const handleBackdropClick = (e: React.MouseEvent) => {
-		if (modalRef.current && e.target === modalRef.current) {
+		if (modalRef.current && e.target === modalRef.current)
 			setSelectedReview(null)
-		}
 	}
 
 	const nextSlide = () => {
@@ -272,12 +232,58 @@ export function ReviewsSection() {
 		setIsTransitioning(true)
 		setCurrentIndex(prev => prev + 1)
 	}
-
 	const prevSlide = () => {
 		if (isTransitioning) return
 		setIsTransitioning(true)
 		setCurrentIndex(prev => prev - 1)
 	}
+
+	// отправка после капчи
+	const submitAfterCaptcha = useCallback(async () => {
+		const cleanPhone = getCleanPhoneNumber()
+		try {
+			const response = await fetch('/api/submit-form', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					name: name.trim(),
+					phone: cleanPhone,
+					source: 'Форма в отзывах',
+					captchaToken, // 👈 токен невидимой капчи
+				}),
+			})
+
+			let result: any
+			try {
+				result = await response.json()
+			} catch {
+				throw new Error('Invalid response format from server')
+			}
+
+			if (response.ok && result.success) {
+				setSubmitStatus('success')
+				setName('')
+				setPhone('')
+				setCaptchaToken('') // одноразовый токен
+				setTimeout(() => {
+					router.push(
+						`/success?name=${encodeURIComponent(
+							name.trim()
+						)}&phone=${encodeURIComponent(cleanPhone)}`
+					)
+				}, 2000)
+			} else {
+				setSubmitStatus('error')
+				setCaptchaToken('')
+			}
+		} catch (error) {
+			console.error('Form error:', error)
+			setSubmitStatus('error')
+			setCaptchaToken('')
+		} finally {
+			setIsSubmitting(false)
+		}
+	}, [captchaToken, getCleanPhoneNumber, name, router])
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
@@ -286,14 +292,11 @@ export function ReviewsSection() {
 
 		const cleanPhone = getCleanPhoneNumber()
 
-		// Валидация данных
 		if (!name.trim()) {
 			setSubmitStatus('error')
 			setIsSubmitting(false)
 			return
 		}
-
-		// Проверяем, что номер начинается с 7 и имеет 11 цифр
 		if (
 			!cleanPhone ||
 			!cleanPhone.startsWith('7') ||
@@ -304,67 +307,28 @@ export function ReviewsSection() {
 			return
 		}
 
-		// Новое: без токена не отправляем
+		// если токена нет — открываем невидимую капчу
 		if (!captchaToken) {
-			setSubmitStatus('error')
-			setIsSubmitting(false)
-			return
+			setCaptchaVisible(true)
+			return // продолжение — в onSuccess
 		}
 
-		try {
-			const response = await fetch('/api/submit-form', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					name: name.trim(),
-					phone: cleanPhone,
-					source: 'Форма в отзывах',
-					captchaToken, // <-- отправляем токен
-				}),
-			})
-
-			let result
-			try {
-				result = await response.json()
-			} catch (jsonError) {
-				throw new Error('Invalid response format from server')
-			}
-
-			if (response.ok && result.success) {
-				setSubmitStatus('success')
-				// Очищаем форму
-				setName('')
-				setPhone('')
-				;(globalThis as any).__resetCaptcha?.()
-				setCaptchaToken('')
-				// Через 2 секунды редиректим
-				setTimeout(() => {
-					router.push(
-						`/success?name=${encodeURIComponent(
-							name.trim()
-						)}&phone=${encodeURIComponent(cleanPhone)}`
-					)
-				}, 2000)
-			} else {
-				setSubmitStatus('error')
-				;(globalThis as any).__resetCaptcha?.()
-				setCaptchaToken('')
-			}
-		} catch (error) {
-			console.error('Form error:', error)
-			setSubmitStatus('error')
-			;(globalThis as any).__resetCaptcha?.()
-			setCaptchaToken('')
-		} finally {
-			setIsSubmitting(false)
-		}
+		// если токен уже есть — сразу отправляем
+		await submitAfterCaptcha()
 	}
 
-	// Ограничение текста до 150 символов
-	const truncateText = (text: string, maxLength: number) => {
-		if (text.length <= maxLength) return text
-		return text.slice(0, maxLength) + '...'
-	}
+	// успешная капча: сохраняем токен и продолжаем отправку
+	const handleCaptchaSuccess = useCallback(
+		(token: string) => {
+			setCaptchaToken(token)
+			submitAfterCaptcha()
+		},
+		[submitAfterCaptcha]
+	)
+
+	// Ограничение текста в карточках
+	const truncateText = (text: string, maxLength: number) =>
+		text.length <= maxLength ? text : text.slice(0, maxLength) + '...'
 
 	return (
 		<section id='reviews' className='py-16 bg-gray-50'>
@@ -460,9 +424,9 @@ export function ReviewsSection() {
 								onClick={() => {
 									setIsTransitioning(true)
 									setCurrentIndex(index + slidesToShow)
-									timeoutRef.current = setTimeout(() => {
-										setIsTransitioning(false)
-									}, 300)
+									const t = setTimeout(() => setIsTransitioning(false), 300)
+									if (timeoutRef.current) clearTimeout(timeoutRef.current)
+									timeoutRef.current = t as any
 								}}
 							/>
 						))}
@@ -527,27 +491,38 @@ export function ReviewsSection() {
 							/>
 						</div>
 
-						{/* Уведомление об обработке данных SmartCaptcha */}
+						{/* Уведомление об обработке данных SmartCaptcha (обязательно при hideShield) */}
 						<p className='text-xs text-gray-500'>
 							На этой странице используется Yandex SmartCaptcha. Данные (включая
 							IP) могут обрабатываться сервисом для защиты от ботов.
 						</p>
 
-						{/* Видимая капча */}
-						<Captcha
-							sitekey={process.env.NEXT_PUBLIC_YC_CAPTCHA_SITEKEY as string}
+						{/* Невидимая капча (не отображает кнопку, открывается по submit) */}
+						<InvisibleCaptcha
+							sitekey={sitekey}
 							language='ru'
-							// test // <- раскомментируйте в dev для тестирования
-							onToken={t => setCaptchaToken(t)}
+							test={testMode}
+							hideShield={true}
+							shieldPosition='bottom-right'
+							visible={captchaVisible}
+							onClose={() => setCaptchaVisible(false)}
+							onToken={handleCaptchaSuccess}
 							onTokenExpired={() => setCaptchaToken('')}
-							onStatusChange={s => console.log('captcha:', s)}
-							hideShield={false}
-							className='pt-1'
+							onStatusChange={s => {
+								if (s === 'network-error') {
+									setSubmitStatus('error')
+									setIsSubmitting(false)
+								}
+								if (s === 'javascript-error') {
+									setSubmitStatus('error')
+									setIsSubmitting(false)
+								}
+							}}
 						/>
 
 						<Button
 							type='submit'
-							disabled={isSubmitting || !captchaToken}
+							disabled={isSubmitting}
 							className='w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium'
 						>
 							{isSubmitting ? 'Отправляем...' : 'Получить консультацию'}
@@ -562,7 +537,7 @@ export function ReviewsSection() {
 						{submitStatus === 'error' && (
 							<div className='text-center text-red-600 text-sm'>
 								Пожалуйста, введите корректные данные (имя и номер +7 XXX
-								XXX-XX-XX) и подтвердите, что вы не робот
+								XXX-XX-XX) и подтвердите отправку через SmartCaptcha
 							</div>
 						)}
 					</form>

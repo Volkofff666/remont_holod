@@ -1,11 +1,11 @@
 'use client'
 
 import type React from 'react'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import Captcha from '@/components/captcha/Captcha' // <-- добавили
+import InvisibleCaptcha from '@/components/captcha/InvisibleCaptcha' // <-- невидимая капча
 
 export function ContactForm() {
 	const [isSubmitting, setIsSubmitting] = useState(false)
@@ -13,22 +13,25 @@ export function ContactForm() {
 	const [modalMessage, setModalMessage] = useState('')
 	const [name, setName] = useState('')
 	const [phone, setPhone] = useState('')
-	const [captchaToken, setCaptchaToken] = useState('') // <-- добавили
+
+	// токен и управление показом челленджа
+	const [captchaToken, setCaptchaToken] = useState('')
+	const [captchaVisible, setCaptchaVisible] = useState(false)
+
 	const modalRef = useRef<HTMLDivElement>(null)
 	const formRef = useRef<HTMLFormElement>(null)
 	const router = useRouter()
 
-	// Функция форматирования номера телефона (как у вас)
+	const sitekey = process.env.NEXT_PUBLIC_YC_CAPTCHA_SITEKEY as string
+	const testMode = process.env.NEXT_PUBLIC_YC_CAPTCHA_TEST === 'true'
+
+	// Форматирование телефона (как у вас)
 	const formatPhoneNumber = (value: string): string => {
 		const phoneNumber = value.replace(/\D/g, '')
 		if (!phoneNumber) return ''
 		let cleaned = phoneNumber
-		if (cleaned.startsWith('8')) {
-			cleaned = '7' + cleaned.slice(1)
-		}
-		if (cleaned.startsWith('9') && cleaned.length >= 10) {
-			cleaned = '7' + cleaned
-		}
+		if (cleaned.startsWith('8')) cleaned = '7' + cleaned.slice(1)
+		if (cleaned.startsWith('9') && cleaned.length >= 10) cleaned = '7' + cleaned
 		if (!cleaned.startsWith('7') && cleaned.length > 0) {
 			if (cleaned.length === 1 && !['7', '8', '9'].includes(cleaned)) {
 				cleaned = '7'
@@ -36,9 +39,7 @@ export function ContactForm() {
 				cleaned = '7' + cleaned
 			}
 		}
-		if (cleaned.length > 11) {
-			cleaned = cleaned.slice(0, 11)
-		}
+		if (cleaned.length > 11) cleaned = cleaned.slice(0, 11)
 		if (cleaned.startsWith('7')) {
 			let formatted = '+'
 			for (let i = 0; i < cleaned.length; i++) {
@@ -50,9 +51,7 @@ export function ContactForm() {
 			}
 			return formatted
 		}
-		if (cleaned.length > 0) {
-			return '+' + cleaned
-		}
+		if (cleaned.length > 0) return '+' + cleaned
 		return ''
 	}
 
@@ -64,13 +63,62 @@ export function ContactForm() {
 
 	const getCleanPhoneNumber = (): string => phone.replace(/\D/g, '')
 
+	// отдельная «реальная» отправка — вызывается после успешной капчи
+	const submitAfterCaptcha = useCallback(async () => {
+		const cleanPhone = getCleanPhoneNumber()
+		try {
+			const response = await fetch('/api/submit-form', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					name: name.trim(),
+					phone: cleanPhone,
+					source: 'Контактная форма',
+					captchaToken, // <-- невидимый токен
+				}),
+			})
+
+			let result: any
+			try {
+				result = await response.json()
+			} catch {
+				throw new Error('Invalid response format from server')
+			}
+
+			if (response.ok && result.success) {
+				router.push(
+					`/success?name=${encodeURIComponent(
+						name.trim()
+					)}&phone=${encodeURIComponent(cleanPhone)}`
+				)
+				setCaptchaToken('') // одноразовый токен — сбрасываем
+			} else {
+				setModalMessage(
+					result.error || 'Ошибка отправки заявки. Попробуйте еще раз.'
+				)
+				setIsModalOpen(true)
+				setCaptchaToken('')
+			}
+		} catch (error: any) {
+			console.error('ContactForm error:', error)
+			setModalMessage(
+				`Ошибка отправки заявки: ${error.message || 'Попробуйте еще раз.'}`
+			)
+			setIsModalOpen(true)
+			setCaptchaToken('')
+		} finally {
+			setIsSubmitting(false)
+		}
+	}, [captchaToken, getCleanPhoneNumber, name, router])
+
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault()
+		if (isSubmitting) return
 		setIsSubmitting(true)
 
 		const cleanPhone = getCleanPhoneNumber()
 
-		// Валидация перед отправкой (как у вас)
+		// Валидация
 		if (!name.trim()) {
 			setModalMessage('Имя обязательно')
 			setIsModalOpen(true)
@@ -91,70 +139,24 @@ export function ContactForm() {
 			return
 		}
 
-		// Новое: без токена не отправляем
+		// если токена нет — открываем невидимую капчу
 		if (!captchaToken) {
-			setModalMessage('Подтвердите, что вы не робот.')
-			setIsModalOpen(true)
-			setIsSubmitting(false)
-			return
+			setCaptchaVisible(true)
+			return // продолжение — в onSuccess капчи
 		}
 
-		try {
-			const response = await fetch('/api/submit-form', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					name: name.trim(),
-					phone: cleanPhone,
-					source: 'Контактная форма',
-					captchaToken, // <-- отправляем токен
-				}),
-			})
-
-			console.log(
-				'ContactForm: HTTP status:',
-				response.status,
-				'OK:',
-				response.ok
-			)
-
-			let result: any
-			try {
-				result = await response.json()
-				console.log('ContactForm API response:', result)
-			} catch (jsonError) {
-				console.error('ContactForm: JSON parse error:', jsonError)
-				throw new Error('Invalid response format from server')
-			}
-
-			if (response.ok && result.success) {
-				router.push(
-					`/success?name=${encodeURIComponent(
-						name.trim()
-					)}&phone=${encodeURIComponent(cleanPhone)}`
-				)
-				;(globalThis as any).__resetCaptcha?.()
-				setCaptchaToken('')
-			} else {
-				setModalMessage(
-					result.error || 'Ошибка отправки заявки. Попробуйте еще раз.'
-				)
-				setIsModalOpen(true)
-				;(globalThis as any).__resetCaptcha?.()
-				setCaptchaToken('')
-			}
-		} catch (error: any) {
-			console.error('ContactForm error:', error)
-			setModalMessage(
-				`Ошибка отправки заявки: ${error.message || 'Попробуйте еще раз.'}`
-			)
-			setIsModalOpen(true)
-			;(globalThis as any).__resetCaptcha?.()
-			setCaptchaToken('')
-		} finally {
-			setIsSubmitting(false)
-		}
+		// если токен уже есть (повторная отправка в срок действия) — сразу отправляем
+		await submitAfterCaptcha()
 	}
+
+	// успешная проверка: сохраняем токен и продолжаем отправку без доп.кликов
+	const handleCaptchaSuccess = useCallback(
+		(token: string) => {
+			setCaptchaToken(token)
+			submitAfterCaptcha()
+		},
+		[submitAfterCaptcha]
+	)
 
 	const closeModal = () => {
 		setIsModalOpen(false)
@@ -163,18 +165,14 @@ export function ContactForm() {
 
 	useEffect(() => {
 		const handleEsc = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') {
-				closeModal()
-			}
+			if (event.key === 'Escape') closeModal()
 		}
 		window.addEventListener('keydown', handleEsc)
 		return () => window.removeEventListener('keydown', handleEsc)
 	}, [])
 
 	const handleBackdropClick = (e: React.MouseEvent) => {
-		if (modalRef.current && e.target === modalRef.current) {
-			closeModal()
-		}
+		if (modalRef.current && e.target === modalRef.current) closeModal()
 	}
 
 	return (
@@ -195,22 +193,37 @@ export function ContactForm() {
 					required
 				/>
 
-				{/* Уведомление об обработке данных SmartCaptcha */}
+				{/* Уведомление об обработке данных SmartCaptcha (обязательно при hideShield) */}
 				<p className='text-xs text-gray-500'>
-					На этой странице используется Yandex SmartCaptcha. Данные (включая IP)
-					могут обрабатываться сервисом для защиты от ботов.
+					На этой странице используется Yandex SmartCaptcha. Данные могут
+					обрабатываться сервисом для защиты от ботов.
 				</p>
 
-				{/* Видимая капча */}
-				<Captcha
-					sitekey={process.env.NEXT_PUBLIC_YC_CAPTCHA_SITEKEY as string}
+				{/* Невидимая капча — открываем задание по visible */}
+				<InvisibleCaptcha
+					sitekey={sitekey}
 					language='ru'
-					// test // <- раскомментируйте в dev для тестирования
-					onToken={t => setCaptchaToken(t)}
+					test={testMode}
+					hideShield={true} // прячем блок уведомления виджета
+					shieldPosition='bottom-right'
+					visible={captchaVisible} // управляем показом извне
+					onClose={() => setCaptchaVisible(false)}
+					onToken={handleCaptchaSuccess}
 					onTokenExpired={() => setCaptchaToken('')}
-					onStatusChange={s => console.log('captcha:', s)}
-					hideShield={false}
-					className='pt-1'
+					onStatusChange={s => {
+						if (s === 'network-error') {
+							setModalMessage('Сетевая ошибка капчи. Попробуйте ещё раз.')
+							setIsModalOpen(true)
+							setIsSubmitting(false)
+						}
+						if (s === 'javascript-error') {
+							setModalMessage(
+								'Критическая ошибка капчи. Повторите попытку позже.'
+							)
+							setIsModalOpen(true)
+							setIsSubmitting(false)
+						}
+					}}
 				/>
 
 				<Button

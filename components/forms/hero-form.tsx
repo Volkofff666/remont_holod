@@ -1,11 +1,11 @@
 'use client'
 
 import type React from 'react'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import Captcha from '@/components/captcha/Captcha' // <-- добавили
+import InvisibleCaptcha from '@/components/captcha/InvisibleCaptcha' // <-- новое
 
 export function HeroForm() {
 	const [name, setName] = useState('')
@@ -13,11 +13,16 @@ export function HeroForm() {
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [isModalOpen, setIsModalOpen] = useState(false)
 	const [modalMessage, setModalMessage] = useState('')
-	const [captchaToken, setCaptchaToken] = useState('') // <-- добавили
+	const [captchaToken, setCaptchaToken] = useState('')
+	const [captchaVisible, setCaptchaVisible] = useState(false) // <-- управляет показом невидимой капчи
+
 	const modalRef = useRef<HTMLDivElement>(null)
 	const router = useRouter()
 
-	// Форматирование номера — ваш код
+	const sitekey = process.env.NEXT_PUBLIC_YC_CAPTCHA_SITEKEY as string
+	const testMode = process.env.NEXT_PUBLIC_YC_CAPTCHA_TEST === 'true'
+
+	// --- ваш форматер номера ---
 	const formatPhoneNumber = (value: string): string => {
 		const phoneNumber = value.replace(/\D/g, '')
 		if (!phoneNumber) return ''
@@ -55,8 +60,54 @@ export function HeroForm() {
 
 	const getCleanPhoneNumber = (): string => phone.replace(/\D/g, '')
 
+	// отдельная функция "реальной" отправки (вызовется после капчи)
+	const submitAfterCaptcha = useCallback(async () => {
+		const cleanPhone = getCleanPhoneNumber()
+		try {
+			const response = await fetch('/api/submit-form', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					name,
+					phone: cleanPhone,
+					source: 'Hero форма',
+					captchaToken, // <-- токен уже есть
+				}),
+			})
+
+			const result = await response.json()
+
+			if (response.ok && result.success) {
+				router.push(
+					`/success?name=${encodeURIComponent(name)}&phone=${encodeURIComponent(
+						cleanPhone
+					)}`
+				)
+				setCaptchaToken('') // токен одноразовый — сбрасываем
+			} else {
+				setModalMessage(
+					result.error ||
+						'Ошибка отправки заявки. Попробуйте ещё раз или позвоните нам.'
+				)
+				setIsModalOpen(true)
+				setCaptchaToken('')
+			}
+		} catch (error) {
+			console.error('Error submitting form:', error)
+			setModalMessage(
+				'Ошибка отправки заявки. Попробуйте ещё раз или позвоните нам.'
+			)
+			setIsModalOpen(true)
+			setCaptchaToken('')
+		} finally {
+			setIsSubmitting(false)
+		}
+	}, [captchaToken, getCleanPhoneNumber, name, router])
+
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
+
+		if (isSubmitting) return
 		setIsSubmitting(true)
 
 		const cleanPhone = getCleanPhoneNumber()
@@ -81,57 +132,26 @@ export function HeroForm() {
 			return
 		}
 
-		// Новое: без токена не отправляем
+		// если токена ещё нет — показываем невидимую капчу
 		if (!captchaToken) {
-			setModalMessage('Подтвердите, что вы не робот.')
-			setIsModalOpen(true)
-			setIsSubmitting(false)
+			setCaptchaVisible(true)
+			// дальше логика продолжится в onSuccess капчи
 			return
 		}
 
-		try {
-			const response = await fetch('/api/submit-form', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					name,
-					phone: cleanPhone,
-					source: 'Hero форма',
-					captchaToken, // <-- отправляем токен
-				}),
-			})
-
-			const result = await response.json()
-
-			if (response.ok && result.success) {
-				router.push(
-					`/success?name=${encodeURIComponent(name)}&phone=${encodeURIComponent(
-						cleanPhone
-					)}`
-				)
-				;(globalThis as any).__resetCaptcha?.()
-				setCaptchaToken('')
-			} else {
-				setModalMessage(
-					result.error ||
-						'Ошибка отправки заявки. Попробуйте еще раз или позвоните нам.'
-				)
-				setIsModalOpen(true)
-				;(globalThis as any).__resetCaptcha?.()
-				setCaptchaToken('')
-			}
-		} catch (error) {
-			console.error('Error submitting form:', error)
-			setModalMessage(
-				'Ошибка отправки заявки. Попробуйте еще раз или позвоните нам.'
-			)
-			setIsModalOpen(true)
-			;(globalThis as any).__resetCaptcha?.()
-			setCaptchaToken('')
-		} finally {
-			setIsSubmitting(false)
-		}
+		// если токен уже есть (повторная отправка в срок действия) — сразу отправляем
+		await submitAfterCaptcha()
 	}
+
+	// когда капча успешно пройдена — сохраняем токен и продолжаем отправку
+	const handleCaptchaSuccess = useCallback(
+		(token: string) => {
+			setCaptchaToken(token)
+			// не ждём дополнительного клика — сразу отправляем
+			submitAfterCaptcha()
+		},
+		[submitAfterCaptcha]
+	)
 
 	const closeModal = () => {
 		setIsModalOpen(false)
@@ -155,12 +175,13 @@ export function HeroForm() {
 			<p className='text-lg font-semibold mb-4'>
 				Оставьте заявку сейчас — получите скидку 10%
 			</p>
+
 			<form onSubmit={handleSubmit} className='space-y-3'>
 				<Input
 					placeholder='Ваше имя'
 					value={name}
 					onChange={e => setName(e.target.value)}
-					className='bg-white text-gray-900 placeholder:text-gray-500'
+					className='bg白 text-gray-900 placeholder:text-gray-500'
 					required
 				/>
 				<Input
@@ -171,22 +192,37 @@ export function HeroForm() {
 					required
 				/>
 
-				{/* Уведомление о данных — оставляем, даже если shield видим */}
+				{/* Альтернативное уведомление (обязательно, если hideShield=true) */}
 				<p className='text-[11px] text-blue-100'>
 					На этой странице используется Yandex SmartCaptcha. Данные могут
 					обрабатываться сервисом для защиты от ботов.
 				</p>
 
-				{/* ВИДИМАЯ КАПЧА */}
-				<Captcha
-					sitekey={process.env.NEXT_PUBLIC_YC_CAPTCHA_SITEKEY as string}
+				{/* Невидимая капча — ничего не рисует, только открывает задание по visible */}
+				<InvisibleCaptcha
+					sitekey={sitekey}
 					language='ru'
-					// test // <- раскомментируйте в dev для тестирования
-					onToken={t => setCaptchaToken(t)}
+					test={testMode}
+					hideShield={true} // прячем шильд
+					shieldPosition='bottom-right'
+					visible={captchaVisible}
+					onClose={() => setCaptchaVisible(false)}
+					onToken={handleCaptchaSuccess}
 					onTokenExpired={() => setCaptchaToken('')}
-					onStatusChange={s => console.log('captcha:', s)}
-					hideShield={false}
-					className='pt-1'
+					onStatusChange={s => {
+						if (s === 'network-error') {
+							setModalMessage('Сетевая ошибка капчи. Попробуйте ещё раз.')
+							setIsModalOpen(true)
+							setIsSubmitting(false)
+						}
+						if (s === 'javascript-error') {
+							setModalMessage(
+								'Критическая ошибка капчи. Повторите попытку позже.'
+							)
+							setIsModalOpen(true)
+							setIsSubmitting(false)
+						}
+					}}
 				/>
 
 				<Button
@@ -197,8 +233,7 @@ export function HeroForm() {
 						isSubmitting ||
 						!name.trim() ||
 						getCleanPhoneNumber().length < 11 ||
-						!getCleanPhoneNumber().startsWith('7') ||
-						!captchaToken
+						!getCleanPhoneNumber().startsWith('7')
 					}
 				>
 					{isSubmitting ? 'Отправляем...' : 'Вызвать мастера'}
