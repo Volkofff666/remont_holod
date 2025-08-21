@@ -20,18 +20,6 @@ import { Footer } from '@/components/layout/footer'
 import { HeroForm } from '@/components/hero-form'
 import { PromoPopup } from '@/components/PromoPopup'
 import YandexMetrika from '@/components/YandexMetrika'
-import { SmartCaptcha } from '@yandex/smart-captcha'
-
-export const ComponentWithCaptcha = () => {
-	const [token, setToken] = useState('')
-
-	return (
-		<SmartCaptcha
-			sitekey='ysc1_LZ2923LcwVO7V7F7XaGkQZvK87gWYBRdV4etZemlcea6620a'
-			onSuccess={setToken}
-		/>
-	)
-}
 
 export default function HomePage() {
 	const { phoneValue, handlePhoneChange } = usePhoneFormat()

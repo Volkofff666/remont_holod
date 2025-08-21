@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import Captcha from '@/components/captcha/Captcha' // <-- добавили
 
 export function ContactForm() {
 	const [isSubmitting, setIsSubmitting] = useState(false)
@@ -12,47 +13,32 @@ export function ContactForm() {
 	const [modalMessage, setModalMessage] = useState('')
 	const [name, setName] = useState('')
 	const [phone, setPhone] = useState('')
+	const [captchaToken, setCaptchaToken] = useState('') // <-- добавили
 	const modalRef = useRef<HTMLDivElement>(null)
 	const formRef = useRef<HTMLFormElement>(null)
 	const router = useRouter()
 
-	// Функция форматирования номера телефона
+	// Функция форматирования номера телефона (как у вас)
 	const formatPhoneNumber = (value: string): string => {
-		// Убираем все нецифровые символы
 		const phoneNumber = value.replace(/\D/g, '')
-
-		// Если номер пустой, возвращаем пустую строку
 		if (!phoneNumber) return ''
-
 		let cleaned = phoneNumber
-
-		// Если номер начинается с 8, заменяем на 7
 		if (cleaned.startsWith('8')) {
 			cleaned = '7' + cleaned.slice(1)
 		}
-
-		// Если номер начинается с 9 и имеет достаточную длину, добавляем код страны 7
 		if (cleaned.startsWith('9') && cleaned.length >= 10) {
 			cleaned = '7' + cleaned
 		}
-
-		// Если номер не начинается с 7, обрезаем или добавляем 7 в начало
 		if (!cleaned.startsWith('7') && cleaned.length > 0) {
-			// Если введена первая цифра не 7 и не 8 и не 9, то заменяем на 7
 			if (cleaned.length === 1 && !['7', '8', '9'].includes(cleaned)) {
 				cleaned = '7'
 			} else if (cleaned.length > 1) {
-				// Для остальных случаев добавляем 7 в начало
 				cleaned = '7' + cleaned
 			}
 		}
-
-		// Ограничиваем длину до 11 цифр (7 + 10 цифр номера)
 		if (cleaned.length > 11) {
 			cleaned = cleaned.slice(0, 11)
 		}
-
-		// Форматируем номер только если он начинается с 7
 		if (cleaned.startsWith('7')) {
 			let formatted = '+'
 			for (let i = 0; i < cleaned.length; i++) {
@@ -64,26 +50,19 @@ export function ContactForm() {
 			}
 			return formatted
 		}
-
-		// Если номер не начинается с 7, но есть цифры, начинаем с +
 		if (cleaned.length > 0) {
 			return '+' + cleaned
 		}
-
 		return ''
 	}
 
-	// Обработчик изменения номера телефона
 	const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const input = e.target.value
 		const formatted = formatPhoneNumber(input)
 		setPhone(formatted)
 	}
 
-	// Получение чистого номера для отправки (только цифры)
-	const getCleanPhoneNumber = (): string => {
-		return phone.replace(/\D/g, '')
-	}
+	const getCleanPhoneNumber = (): string => phone.replace(/\D/g, '')
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault()
@@ -91,7 +70,7 @@ export function ContactForm() {
 
 		const cleanPhone = getCleanPhoneNumber()
 
-		// Валидация перед отправкой
+		// Валидация перед отправкой (как у вас)
 		if (!name.trim()) {
 			setModalMessage('Имя обязательно')
 			setIsModalOpen(true)
@@ -99,7 +78,6 @@ export function ContactForm() {
 			return
 		}
 
-		// Проверяем, что номер начинается с 7 и имеет 11 цифр
 		if (
 			!cleanPhone ||
 			!cleanPhone.startsWith('7') ||
@@ -113,6 +91,14 @@ export function ContactForm() {
 			return
 		}
 
+		// Новое: без токена не отправляем
+		if (!captchaToken) {
+			setModalMessage('Подтвердите, что вы не робот.')
+			setIsModalOpen(true)
+			setIsSubmitting(false)
+			return
+		}
+
 		try {
 			const response = await fetch('/api/submit-form', {
 				method: 'POST',
@@ -121,6 +107,7 @@ export function ContactForm() {
 					name: name.trim(),
 					phone: cleanPhone,
 					source: 'Контактная форма',
+					captchaToken, // <-- отправляем токен
 				}),
 			})
 
@@ -131,7 +118,7 @@ export function ContactForm() {
 				response.ok
 			)
 
-			let result
+			let result: any
 			try {
 				result = await response.json()
 				console.log('ContactForm API response:', result)
@@ -141,36 +128,39 @@ export function ContactForm() {
 			}
 
 			if (response.ok && result.success) {
-				// Редирект на страницу успеха вместо модального окна
 				router.push(
 					`/success?name=${encodeURIComponent(
 						name.trim()
 					)}&phone=${encodeURIComponent(cleanPhone)}`
 				)
+				;(globalThis as any).__resetCaptcha?.()
+				setCaptchaToken('')
 			} else {
 				setModalMessage(
 					result.error || 'Ошибка отправки заявки. Попробуйте еще раз.'
 				)
 				setIsModalOpen(true)
+				;(globalThis as any).__resetCaptcha?.()
+				setCaptchaToken('')
 			}
-		} catch (error) {
+		} catch (error: any) {
 			console.error('ContactForm error:', error)
 			setModalMessage(
 				`Ошибка отправки заявки: ${error.message || 'Попробуйте еще раз.'}`
 			)
 			setIsModalOpen(true)
+			;(globalThis as any).__resetCaptcha?.()
+			setCaptchaToken('')
 		} finally {
 			setIsSubmitting(false)
 		}
 	}
 
-	// Закрытие модала
 	const closeModal = () => {
 		setIsModalOpen(false)
 		setModalMessage('')
 	}
 
-	// Закрытие модала по клавише Esc
 	useEffect(() => {
 		const handleEsc = (event: KeyboardEvent) => {
 			if (event.key === 'Escape') {
@@ -181,7 +171,6 @@ export function ContactForm() {
 		return () => window.removeEventListener('keydown', handleEsc)
 	}, [])
 
-	// Закрытие модала при клике на фон
 	const handleBackdropClick = (e: React.MouseEvent) => {
 		if (modalRef.current && e.target === modalRef.current) {
 			closeModal()
@@ -205,6 +194,25 @@ export function ContactForm() {
 					onChange={handlePhoneChange}
 					required
 				/>
+
+				{/* Уведомление об обработке данных SmartCaptcha */}
+				<p className='text-xs text-gray-500'>
+					На этой странице используется Yandex SmartCaptcha. Данные (включая IP)
+					могут обрабатываться сервисом для защиты от ботов.
+				</p>
+
+				{/* Видимая капча */}
+				<Captcha
+					sitekey={process.env.NEXT_PUBLIC_YC_CAPTCHA_SITEKEY as string}
+					language='ru'
+					// test // <- раскомментируйте в dev для тестирования
+					onToken={t => setCaptchaToken(t)}
+					onTokenExpired={() => setCaptchaToken('')}
+					onStatusChange={s => console.log('captcha:', s)}
+					hideShield={false}
+					className='pt-1'
+				/>
+
 				<Button
 					size='lg'
 					className='w-full bg-blue-600 hover:bg-blue-700'

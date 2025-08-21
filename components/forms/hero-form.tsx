@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import Captcha from '@/components/captcha/Captcha' // <-- добавили
 
 export function HeroForm() {
 	const [name, setName] = useState('')
@@ -12,46 +13,25 @@ export function HeroForm() {
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [isModalOpen, setIsModalOpen] = useState(false)
 	const [modalMessage, setModalMessage] = useState('')
+	const [captchaToken, setCaptchaToken] = useState('') // <-- добавили
 	const modalRef = useRef<HTMLDivElement>(null)
 	const router = useRouter()
 
-	// Функция форматирования номера телефона
+	// Форматирование номера — ваш код
 	const formatPhoneNumber = (value: string): string => {
-		// Убираем все нецифровые символы
 		const phoneNumber = value.replace(/\D/g, '')
-
-		// Если номер пустой, возвращаем пустую строку
 		if (!phoneNumber) return ''
-
 		let cleaned = phoneNumber
-
-		// Если номер начинается с 8, заменяем на 7
-		if (cleaned.startsWith('8')) {
-			cleaned = '7' + cleaned.slice(1)
-		}
-
-		// Если номер начинается с 9 и имеет достаточную длину, добавляем код страны 7
-		if (cleaned.startsWith('9') && cleaned.length >= 10) {
-			cleaned = '7' + cleaned
-		}
-
-		// Если номер не начинается с 7, обрезаем или добавляем 7 в начало
+		if (cleaned.startsWith('8')) cleaned = '7' + cleaned.slice(1)
+		if (cleaned.startsWith('9') && cleaned.length >= 10) cleaned = '7' + cleaned
 		if (!cleaned.startsWith('7') && cleaned.length > 0) {
-			// Если введена первая цифра не 7 и не 8 и не 9, то заменяем на 7
 			if (cleaned.length === 1 && !['7', '8', '9'].includes(cleaned)) {
 				cleaned = '7'
 			} else if (cleaned.length > 1) {
-				// Для остальных случаев добавляем 7 в начало
 				cleaned = '7' + cleaned
 			}
 		}
-
-		// Ограничиваем длину до 11 цифр (7 + 10 цифр номера)
-		if (cleaned.length > 11) {
-			cleaned = cleaned.slice(0, 11)
-		}
-
-		// Форматируем номер только если он начинается с 7
+		if (cleaned.length > 11) cleaned = cleaned.slice(0, 11)
 		if (cleaned.startsWith('7')) {
 			let formatted = '+'
 			for (let i = 0; i < cleaned.length; i++) {
@@ -63,26 +43,17 @@ export function HeroForm() {
 			}
 			return formatted
 		}
-
-		// Если номер не начинается с 7, но есть цифры, начинаем с +
-		if (cleaned.length > 0) {
-			return '+' + cleaned
-		}
-
+		if (cleaned.length > 0) return '+' + cleaned
 		return ''
 	}
 
-	// Обработчик изменения номера телефона
 	const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const input = e.target.value
 		const formatted = formatPhoneNumber(input)
 		setPhone(formatted)
 	}
 
-	// Получение чистого номера для отправки (только цифры)
-	const getCleanPhoneNumber = (): string => {
-		return phone.replace(/\D/g, '')
-	}
+	const getCleanPhoneNumber = (): string => phone.replace(/\D/g, '')
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
@@ -90,7 +61,6 @@ export function HeroForm() {
 
 		const cleanPhone = getCleanPhoneNumber()
 
-		// Валидация номера телефона
 		if (!name.trim()) {
 			setModalMessage('Пожалуйста, введите ваше имя')
 			setIsModalOpen(true)
@@ -98,7 +68,6 @@ export function HeroForm() {
 			return
 		}
 
-		// Проверяем, что номер начинается с 7 и имеет 11 цифр
 		if (
 			!cleanPhone ||
 			!cleanPhone.startsWith('7') ||
@@ -112,33 +81,44 @@ export function HeroForm() {
 			return
 		}
 
+		// Новое: без токена не отправляем
+		if (!captchaToken) {
+			setModalMessage('Подтвердите, что вы не робот.')
+			setIsModalOpen(true)
+			setIsSubmitting(false)
+			return
+		}
+
 		try {
 			const response = await fetch('/api/submit-form', {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					name,
 					phone: cleanPhone,
 					source: 'Hero форма',
+					captchaToken, // <-- отправляем токен
 				}),
 			})
 
 			const result = await response.json()
 
-			if (result.success) {
-				// Редирект на страницу успеха вместо модального окна
+			if (response.ok && result.success) {
 				router.push(
 					`/success?name=${encodeURIComponent(name)}&phone=${encodeURIComponent(
 						cleanPhone
 					)}`
 				)
+				;(globalThis as any).__resetCaptcha?.()
+				setCaptchaToken('')
 			} else {
 				setModalMessage(
-					'Ошибка отправки заявки. Попробуйте еще раз или позвоните нам.'
+					result.error ||
+						'Ошибка отправки заявки. Попробуйте еще раз или позвоните нам.'
 				)
 				setIsModalOpen(true)
+				;(globalThis as any).__resetCaptcha?.()
+				setCaptchaToken('')
 			}
 		} catch (error) {
 			console.error('Error submitting form:', error)
@@ -146,33 +126,28 @@ export function HeroForm() {
 				'Ошибка отправки заявки. Попробуйте еще раз или позвоните нам.'
 			)
 			setIsModalOpen(true)
+			;(globalThis as any).__resetCaptcha?.()
+			setCaptchaToken('')
 		} finally {
 			setIsSubmitting(false)
 		}
 	}
 
-	// Закрытие модала
 	const closeModal = () => {
 		setIsModalOpen(false)
 		setModalMessage('')
 	}
 
-	// Закрытие модала по клавише Esc
 	useEffect(() => {
 		const handleEsc = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') {
-				closeModal()
-			}
+			if (event.key === 'Escape') closeModal()
 		}
 		window.addEventListener('keydown', handleEsc)
 		return () => window.removeEventListener('keydown', handleEsc)
 	}, [])
 
-	// Закрытие модала при клике на фон
 	const handleBackdropClick = (e: React.MouseEvent) => {
-		if (modalRef.current && e.target === modalRef.current) {
-			closeModal()
-		}
+		if (modalRef.current && e.target === modalRef.current) closeModal()
 	}
 
 	return (
@@ -195,6 +170,25 @@ export function HeroForm() {
 					onChange={handlePhoneChange}
 					required
 				/>
+
+				{/* Уведомление о данных — оставляем, даже если shield видим */}
+				<p className='text-[11px] text-blue-100'>
+					На этой странице используется Yandex SmartCaptcha. Данные (включая IP)
+					могут обрабатываться сервисом для защиты от ботов.
+				</p>
+
+				{/* ВИДИМАЯ КАПЧА */}
+				<Captcha
+					sitekey={process.env.NEXT_PUBLIC_YC_CAPTCHA_SITEKEY as string}
+					language='ru'
+					// test // <- раскомментируйте в dev для тестирования
+					onToken={t => setCaptchaToken(t)}
+					onTokenExpired={() => setCaptchaToken('')}
+					onStatusChange={s => console.log('captcha:', s)}
+					hideShield={false}
+					className='pt-1'
+				/>
+
 				<Button
 					type='submit'
 					size='lg'
@@ -203,12 +197,14 @@ export function HeroForm() {
 						isSubmitting ||
 						!name.trim() ||
 						getCleanPhoneNumber().length < 11 ||
-						!getCleanPhoneNumber().startsWith('7')
+						!getCleanPhoneNumber().startsWith('7') ||
+						!captchaToken
 					}
 				>
 					{isSubmitting ? 'Отправляем...' : 'Вызвать мастера'}
 				</Button>
 			</form>
+
 			<p className='text-xs text-blue-100 mt-2'>
 				Нажимая кнопку, вы соглашаетесь с обработкой персональных данных
 			</p>
